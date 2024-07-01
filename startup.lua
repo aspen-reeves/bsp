@@ -1,6 +1,6 @@
 -- VERSION     = "bsp.lua v1.0",
 -- DESCRIPTION = "Blahaj Subsonic Player, a simple subsonic client for ComputerCraft",
--- URL         = "",
+-- URL         = "https://github.com/aspen-reeves/bsp",
 -- LICENSE     =
 --         FUCK AROUND and FIND OUT PUBLIC LICENSE
 --                 Version 2, August 2023
