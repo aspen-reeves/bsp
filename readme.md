@@ -18,7 +18,7 @@ This is, right now, a very basic music player for CC:T, that uses any subsonic s
 ## Installation
 
 - download both startup.lua and md5.lua
-- Set the following settings using the setting api
+- Set the following settings using the setting api, or edit the settings example file and run it
 
 ```sh
 > set bsp.instance <URL>
