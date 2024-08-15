@@ -22,7 +22,7 @@ This is, right now, a very basic music player for CC:T, that uses any subsonic s
 
 ```sh
 > set bsp.instance <URL>
-> set bsp.username <username>
+> set bsp.user <username>
 > set bsp.password <password>
 > set bsp.playlist <playlist>
 ```
@@ -30,7 +30,7 @@ This is, right now, a very basic music player for CC:T, that uses any subsonic s
 Where:
 
 - `instance` is the URL of the subsonic server
-- `username` is the username to the subsonic user
+- `user` is the username to the subsonic user
 - `password` is the password to the subsonic user
 - `playlist` is the subsonic playlist to play
 
@@ -61,7 +61,7 @@ Where:
   - `Command`:
 
 ```sh
- ffmpeg -i %s -c:a dfpwm -ar 48k -ac 1 -f drpwm -
+ ffmpeg -i %s -c:a dfpwm -ar 48k -ac 1 -f dfpwm -
 ```
 
 > Warning: This setting allows for any arbitrary command to be run on the server, so be careful with what you put in here and who has access to it
