@@ -184,6 +184,7 @@ local function writeQueueMonitor(playlist, index)
     if not monitor then
         return
     end
+    local _, h = monitor.getSize()
     monitor.clear()
     monitor.setTextColor(4)
     monitor.setTextScale(1)
@@ -194,7 +195,7 @@ local function writeQueueMonitor(playlist, index)
     if #playlist > index then
         monitor.setCursorPos(1, 3)
         monitor.write("Next Up: ")
-        for i = 1, #playlist - index - 1 do
+        for i = 1, math.max(#playlist - index - 1, h - 3) do
             monitor.setCursorPos(1, 3 + i)
             monitor.write(index + i .. ". ")
             monitor.write(playlist[index + i].name)
@@ -205,6 +206,9 @@ end
 
 
 local songs = getPlaylistSongs()
+if doShuffle then
+    songs = shufflePlaylist(songs)
+end
 for index, song in pairs(songs) do
     writeQueueMonitor(songs, index)
     print(song.name)
