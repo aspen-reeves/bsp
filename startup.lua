@@ -30,7 +30,6 @@
 local playlist = settings.get("bsp.playlist")
 local doShuffle = settings.get("bsp.shuffle", true)
 local volume = settings.get("bsp.volume", 5.0)
-local displayNum = settings.get("bsp.displayNum", 10)
 
 local instance = settings.get("bsp.instance")
 local user = settings.get("bsp.user")
@@ -42,178 +41,172 @@ local client = settings.get("bsp.client", "bsp")
 local md5 = require("md5")
 local monitor = peripheral.find("monitor")
 local dfpwm = require("cc.audio.dfpwm")
-local speaker = peripheral.find("speaker")
+local speaker = peripheral.find("speaker") or error("speaker is required", 0)
+local playing
 
---subsonic would like a token to be generated for each new request, rather than using the password directly
---The token is a md5 hash of the password and a salt generated for each request
-local function getAuthToken()
+
+
+---Generate the lion share of the URL.
+---@param method string Method name, e.g. stream
+---@return string URL Base URL
+local function getRequestURL(method)
     local salt = ""
-    --generate 8 character hex salt
     for i = 1, 8 do
         salt = salt .. string.format("%x", math.random(0, 15))
     end
     local token = md5.sumhexa(password .. salt)
-    return token, salt
-end
-
---function to get request URL, minus the optional parameters for a given method, which will be handled in the individual methods
-local function getRequestURL(method)
-    local token, salt = getAuthToken()
-    local tmpURL = instance ..
-        "/rest/" ..
-        method .. "?u=" .. user .. "&t=" .. token .. "&s=" .. salt .. "&v=" .. version .. "&c=" .. client .. "&f=json"
+    local tmpURL = instance .. "/rest/" .. method .. "?u=" .. user .. "&t=" .. token .. "&s=" .. salt .. "&v=" .. version .. "&c=" .. client .. "&f=json"
     return tmpURL
 end
 
---function to get the list of playlists
+
+
+---Get list of playlists.
+---@return table playlists Format: Playlist Name = UUID
 local function getPlaylists()
     local requesturl = getRequestURL("getPlaylists")
     local response = http.get(requesturl, {}, true)
-
-    --return a table of paired id and name
     if response then
+        ---@diagnostic disable-next-line: need-check-nil
         local data = response.readAll()
+        ---@diagnostic disable-next-line: need-check-nil
         local decoded = textutils.unserializeJSON(data)
         local playlists = {}
-        for i, v in pairs(decoded["subsonic-response"]["playlists"]["playlist"]) do
-            playlists[v["id"]] = v["name"]
+        ---@diagnostic disable-next-line: need-check-nil
+        for _, playlist in pairs(decoded["subsonic-response"].playlists.playlist) do
+            playlists[playlist.name] = playlist.id
         end
         response.close()
         return playlists
     else
         print("Failed to connect to server")
     end
+    return {}
 end
---here we get all the songs in a playlist, and return a table of index, id, and title
+
+
+
+---Get list of songs in a playlist.
+---@param playlistName string|nil Name of playlist
+---@return table songs Format: List of tables with keys id and name
 local function getPlaylistSongs(playlistName)
     local playlists = getPlaylists()
     if playlistName == nil then
         playlistName = playlist
     end
-    local playlistID = nil
-    for i, v in pairs(playlists) do
-        if v == playlistName then
-            playlistID = i
-        end
+    if not playlists[playlistName] then
+        error("Playlist not found!", 0)
     end
-    if playlistID == nil then
-        error("Playlist not found")
-    end
-    local requesturl = getRequestURL("getPlaylist") .. "&id=" .. playlistID
+    local requesturl = getRequestURL("getPlaylist") .. "&id=" .. playlists[playlistName]
     local response = http.get(requesturl, {}, true)
     if response then
         local data = response.readAll()
         local decoded = textutils.unserializeJSON(data)
         local songs = {}
-        -- each entry needs an index, the id, and the title
-
-        for i, v in pairs(decoded["subsonic-response"]["playlist"]["entry"]) do
-            songs[v["id"]] = v["title"]
+        for _, song in pairs(decoded["subsonic-response"].playlist.entry) do
+            table.insert(songs, {
+                id = song.id,
+                name = song.title
+            })
         end
-        local songCount = 1
-        local queue = {} -- contain index, id, and title
-        for i, v in pairs(songs) do
-            queue[songCount] = { i, v }
-            songCount = songCount + 1
-        end
-
         response.close()
-        return queue
+        return songs
     else
         print("Failed to connect to server")
     end
+    return {}
 end
 
-local function shufflePlaylist(songList)
+
+
+---Shuffle around songs in playlist.
+---@param playlist table Playlist
+---@return table shuffled Shuffled playlist
+---@see getPlaylistSongs
+local function shufflePlaylist(playlist)
     local shuffled = {}
-    for i = 1, #songList do
-        shuffled[i] = songList[i]
-    end
-    for i = 1, #shuffled do
-        local j = math.random(i)
-        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+    for i = 1, #playlist do
+        local newIndex
+        repeat
+            newIndex = math.random(1, #playlist)
+        until not shuffled[newIndex]
+        shuffled[newIndex] = playlist[i]
     end
     return shuffled
 end
-local function getSong(id)
+
+
+
+---Play song by ID.
+---@param id string Song UUID 
+local function playSong(id)
+    -- Playing is basically a lockfile
+    if playing == id then
+        return
+    end
+    playing = id
     local requesturl = getRequestURL("stream") .. "&id=" .. id .. "&format=dfpwm"
     http.request({ url = requesturl, binary = true, headers = {}, method = "GET" })
-    local event, url, response = os.pullEvent("http_success", 120)
-
+    local _, url, response = os.pullEvent("http_success", 120)
     if not response then
         error("Instance big read error! " .. url)
     end
-    local data = response.readAll()
+    local stream = response.readAll()
     response.close()
-    return data
-end
--- song data is in a big string, so we need to be able to split it into chunks
--- Stolen from ksss, Licenced MIT,  Copyright (c) 2024 kotahu
--- https://git.fish/kotahu/ksss
-local function splitSong(songData, size)
-    local chunks = {}
-    local i = 1
-    while i * size < string.len(songData) do
-        chunks[#chunks + 1] = string.sub(songData, (i - 1) * size, (i * size) - 1)
-        i = i + 1
+    if #stream == 0 then
+        error("No audio data received! Make sure your transcoder settings are 100% correct (e.g. -f FFmpeg flag is set to dfpwm)", 0)
     end
-    chunks[#chunks + 1] = string.sub(songData, (i - 1) * size, string.len(songData))
-    return chunks
-end
---initialize the queueList
-local queueList = nil
-local currentSong = 1
-local function getNextSong()
-    currentSong = currentSong + 1
-    if not queueList or #queueList < currentSong then
-        queueList = getPlaylistSongs()
-        if doShuffle then
-            queueList = shufflePlaylist(queueList)
-        end
-        currentSong = 1
-    end
-    return queueList[currentSong]
-end
-
--- this will write the current song and the next songs to the monitor, up to the displayNum
-local function writeQueueMonitor()
-    monitor.clear()
-    monitor.setTextColor(4)
-    monitor.setTextScale(1)
-    if displayNum == 0 then
-        return
-    end
-    monitor.setCursorPos(1, 1)
-    monitor.write("Now Playing: ")
-    monitor.setCursorPos(1, 2)
-    if queueList == nil then
-        error("Queue not initialized")
-    end
-    monitor.write(queueList[currentSong][2])
-    if displayNum > 1 then
-        monitor.setCursorPos(1, 3)
-        monitor.write("Next Up: ")
-        for i = 1, displayNum - 1 do
-            monitor.setCursorPos(1, 3 + i)
-            monitor.write(i .. ". ")
-            monitor.write(queueList[currentSong + i][2])
-        end
-    end
-end
-local function playAudio()
-    local song = getNextSong()
-    writeQueueMonitor()
-    print(song[2])
-    local songData = getSong(song[1])
     local decoder = dfpwm.make_decoder()
-    for _, chunk in pairs(splitSong(songData, 16 * 1024)) do
-        local buffer = decoder(chunk)
-        while not speaker.playAudio(buffer, volume) do
+    print("Starting preprocessing...")
+    local chunks = {}
+    for i = 1, #stream / (16 * 1024) do
+        chunks[i] = decoder(stream:sub((i - 1) * 16 * 1024 + 1, i * 16 * 1024))
+    end
+    print("Preprocessing done!")
+    for _, chunk in pairs(chunks) do
+        if playing ~= id then
+            speaker.stop()
+            return
+        end
+        while not speaker.playAudio(chunk, volume) do
             os.pullEvent("speaker_audio_empty")
         end
     end
+    playing = ""
 end
-while true do
-    parallel.waitForAny(playAudio, function() os.pullEvent("monitor_touch") end)
-    os.sleep(1)
+
+
+
+---Display remaining tracks on an attached monitor.
+---@param playlist table Playlist
+---@param index number Index of current 
+local function writeQueueMonitor(playlist, index)
+    if not monitor then
+        return
+    end
+    monitor.clear()
+    monitor.setTextColor(4)
+    monitor.setTextScale(1)
+    monitor.setCursorPos(1, 1)
+    monitor.write("Now Playing: ")
+    monitor.setCursorPos(1, 2)
+    monitor.write(playlist[index].name)
+    if #playlist > index then
+        monitor.setCursorPos(1, 3)
+        monitor.write("Next Up: ")
+        for i = 1, #playlist - index - 1 do
+            monitor.setCursorPos(1, 3 + i)
+            monitor.write(index + i .. ". ")
+            monitor.write(playlist[index + i].name)
+        end
+    end
+end
+
+
+
+local songs = getPlaylistSongs()
+for index, song in pairs(songs) do
+    writeQueueMonitor(songs, index)
+    print(song.name)
+    playSong(song.id)
 end
