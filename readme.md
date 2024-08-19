@@ -2,7 +2,7 @@
 
 This is, right now, a very basic music player for CC:T, that uses any subsonic server with a compatible dfpwm encoder(see below), a CC:T computer with a speaker, and optionally a monitor to display the song queue and current song.
 
-## This project will likely not be updated, as such i am realeasing under a dual license, MIT and the FAFO-2-CLAUSE version 2, because as much as i like my own license, the MIT license has actual legal backing
+## This project will likely not be updated, as such i am releasing under a dual license, MIT and the FAFO-2-CLAUSE version 2, because as much as i like my own license, the MIT license has actual legal backing
 
 ## Features
 
