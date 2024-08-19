@@ -2,6 +2,8 @@
 
 This is, right now, a very basic music player for CC:T, that uses any subsonic server with a compatible dfpwm encoder(see below), a CC:T computer with a speaker, and optionally a monitor to display the song queue and current song.
 
+## This project will likely not be updated, as such i am realeasing under a dual license, MIT and the FAFO-2-CLAUSE version 2, because as much as i like my own license, the MIT license has actual legal backing
+
 ## Features
 
 - Can play a playlist from a subsonic server, optionally with shuffle
@@ -70,4 +72,4 @@ Where:
 
 - Parts of startup.lua are based on code from KSSS, License MIT, Copyright (c) 2024 kotahu
 - This repository includes md5.lua, License MIT, Copyright (c) 2013 Enrique García Cota + Adam Baldwin + hanzao + Equi 4 Software
-- The rest of this code is licensed under the FAFO-2-CLAUSE version 2, [a permissive public license](https://github.com/aspen-reeves/FAFO-PL)
+- The rest of this code is now licensed under both MIT and the FAFO-2-CLAUSE version 2, [a permissive public license](https://github.com/aspen-reeves/FAFO-PL)
